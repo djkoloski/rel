@@ -1,0 +1,22 @@
+- [ ] Extension methods for boxy types (e.g. `Box`, `OwnedVal`) that return an `In` (e.g. `deref_in`)
+- [ ] Should `In<P, Q>: DerefMut where P: DerefMut, P::Target: Unpin`?
+- [ ] Provide some allocators from a crate like `rel_allocator`
+- [ ] Extension methods for `RegionalAllocator` and `RawRegionalAllocator` that return an `In` from `Allocate`
+- [ ] Add CI checks that:
+  - [ ] Check formatting
+  - [ ] Run clippy
+  - [ ] Run the example
+  - [ ] Run the example under MIRI with MIRIFLAGS="-Zmiri-strict-provenance"
+  - [ ] Build docs
+
+Backlog
+- [ ] Write derive macro for `DebugRaw`
+- [ ] Make `RegionalAllocator`/`RawRegionalAllocator` less wordy
+- [ ] Add `RelMut` to parallel `RefRef`
+- [ ] Add support for subslicing in `IndexRaw` and `IndexMutRaw` by adding a `SliceIndex` type
+- [ ] Add support for runtime regions by creating a fresh `Unique` value and associating it with an allocated object. Then dynamically check whether a memory segment is located in that region and create an `In` to carry that invariant.
+- [ ] Make derive macros optional for all crates?
+- [ ] Add more robust testing for `no_std` compatibility
+- [ ] Figure out how to provide an `Emplace` derive
+  - [ ] Maybe `#[derive(Emplace)] #[emplace(RelFoo, RelBar, ...)]`
+  - [ ] This is supposed to be rkyv's job?
