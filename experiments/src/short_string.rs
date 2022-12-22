@@ -10,7 +10,7 @@ use ::core::{
         slice_from_raw_parts_mut,
     },
 };
-use ::mischief::{In, Slot};
+use ::mischief::{In, RegionalAllocator, Slot};
 use ::munge::munge;
 use ::ptr_meta::Pointee;
 use ::rel_alloc::alloc::RelAllocator;
@@ -243,7 +243,7 @@ unsafe impl<A, B, R> Emplace<RelShortString<A, B>, R::Region> for Clone<'_, R>
 where
     A: DropRaw + RawRegionalAllocator<Region = R::Region>,
     B: Basis,
-    R: RelAllocator<A>,
+    R: RegionalAllocator + RelAllocator<A, R::Region>,
 {
     fn emplaced_meta(&self) -> <RelShortString<A, B> as Pointee>::Metadata {}
 

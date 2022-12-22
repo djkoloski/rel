@@ -1,3 +1,4 @@
+pub mod benchmarks;
 pub mod from_data;
 pub mod gen;
 mod log;
@@ -6,24 +7,40 @@ mod mesh;
 
 use ::criterion::{criterion_group, criterion_main, Criterion};
 
+fn run_benchmarks<I>(
+    c: &mut Criterion,
+    group_name: &'static str,
+    mut benchmarks: benchmarks::Benchmarks<I>,
+) {
+    let mut group = c.benchmark_group(group_name);
+    for benchmark in benchmarks.benches {
+        let size = benchmark.run(&benchmarks.input, &mut benchmarks.bytes);
+        println!("{}/{}", group_name, benchmark.name);
+        println!("                        size:   {} bytes", size);
+        group.bench_function(benchmark.name, |b| {
+            b.iter(|| benchmark.run(&benchmarks.input, &mut benchmarks.bytes))
+        });
+    }
+}
+
 fn criterion_benchmark(c: &mut Criterion) {
-    let mut bench = mesh::make_bench(&mut gen::default_rng(), 125_000);
-    println!("populate_mesh           size:   {} bytes", bench());
-    c.bench_function("populate_mesh", |b| {
-        b.iter(&mut bench);
-    });
+    run_benchmarks(
+        c,
+        "mesh",
+        mesh::make_benches(&mut gen::default_rng(), 125_000),
+    );
 
-    let mut bench = log::make_bench(&mut gen::default_rng(), 10_000);
-    println!("populate_log            size:   {} bytes", bench());
-    c.bench_function("populate_log", |b| {
-        b.iter(&mut bench);
-    });
+    run_benchmarks(
+        c,
+        "log",
+        log::make_benches(&mut gen::default_rng(), 10_000),
+    );
 
-    let mut bench = mc_savedata::make_bench(&mut gen::default_rng(), 500);
-    println!("populate_mc_savedata    size:   {} bytes", bench());
-    c.bench_function("populate_mc_savedata", |b| {
-        b.iter(&mut bench);
-    });
+    run_benchmarks(
+        c,
+        "mc_savedata",
+        mc_savedata::make_benches(&mut gen::default_rng(), 500),
+    );
 }
 
 criterion_group!(benches, criterion_benchmark);

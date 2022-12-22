@@ -1,16 +1,29 @@
 mod data;
 
-use ::criterion::black_box;
-use ::mischief::{GhostRef, In, Region, Slot, StaticToken};
+use ::mischief::{
+    lease_static,
+    runtime_token,
+    In,
+    Region,
+    RegionalAllocator,
+    Slot,
+    StaticToken,
+    StaticVal,
+};
 use ::munge::munge;
 use ::rand::Rng;
 use ::rel_alloc::{alloc::RelAllocator, EmplaceIn, RelString, RelVec};
-use ::rel_allocators::{RelSlabAllocator, SlabAllocator};
+use ::rel_allocators::{
+    brand::Brand,
+    external::External,
+    prefix::{Prefix, RelPrefix},
+    slab::Slab,
+};
 use ::rel_core::{Emplace, EmplaceExt, Move, Portable, U16, U64};
 use ::rel_util::Align16;
 use ::situ::{alloc::RawRegionalAllocator, DropRaw};
 
-use crate::{from_data::FromData, gen::generate_vec};
+use crate::{benchmarks::*, from_data::FromData, gen::generate_vec};
 
 #[derive(DropRaw, Move, Portable)]
 #[repr(C)]
@@ -60,7 +73,7 @@ unsafe impl<A, R> Emplace<RelEntry<A>, R::Region>
     for FromData<'_, R, data::Entry>
 where
     A: DropRaw + RawRegionalAllocator<Region = R::Region>,
-    R: Clone + RelAllocator<A>,
+    R: Clone + RegionalAllocator + RelAllocator<A, R::Region>,
 {
     fn emplaced_meta(&self) -> <RelEntry<A> as ptr_meta::Pointee>::Metadata {}
 
@@ -103,7 +116,7 @@ pub struct RelLog<A: RawRegionalAllocator> {
 unsafe impl<A, R> Emplace<RelLog<A>, R::Region> for FromData<'_, R, data::Log>
 where
     A: DropRaw + Move<R::Region> + RawRegionalAllocator<Region = R::Region>,
-    R: Clone + RelAllocator<A>,
+    R: Clone + RegionalAllocator + RelAllocator<A, R::Region>,
 {
     fn emplaced_meta(&self) -> <RelLog<A> as ptr_meta::Pointee>::Metadata {}
 
@@ -129,34 +142,59 @@ where
     }
 }
 
-fn populate_buffer(data: &data::Log, buffer: Slot<'_, [u8]>) -> usize {
+fn populate_buffer_external(data: &data::Log, buffer: Slot<'_, [u8]>) -> usize {
+    runtime_token!(AllocatorToken);
+    lease_static!(AllocatorToken => Allocator: External<'static, Slab>);
+
+    let mut allocator_token = AllocatorToken::acquire();
+    let buffer = unsafe { ::core::mem::transmute(buffer) };
+    let allocator = StaticVal::<Allocator>::new(
+        &mut allocator_token,
+        External::new(buffer).unwrap(),
+    );
     StaticToken::acquire(|mut token| {
-        let alloc =
-            SlabAllocator::<_>::try_new_in(buffer, GhostRef::leak(&mut token))
-                .unwrap();
+        let alloc = Brand::new_deref(allocator.as_ref(), &mut token);
 
-        let log = FromData { alloc, data }
-            .emplace_in::<RelLog<RelSlabAllocator<_>>>(alloc);
+        ::core::mem::forget(
+            FromData { alloc, data }.emplace_in::<RelLog<_>>(alloc),
+        );
 
-        alloc.deposit(log);
-        alloc.shrink_to_fit()
+        alloc.inner().control().len()
     })
 }
 
-pub fn make_bench(
+fn populate_buffer_prefix(data: &data::Log, buffer: Slot<'_, [u8]>) -> usize {
+    StaticToken::acquire(|mut token| {
+        let alloc =
+            Prefix::<Slab, _>::try_new_in_region(buffer, &mut token).unwrap();
+
+        ::core::mem::forget(
+            FromData { alloc, data }
+                .emplace_in::<RelLog<RelPrefix<Slab, _>>>(alloc),
+        );
+
+        alloc.control().len()
+    })
+}
+
+pub fn make_benches(
     rng: &mut impl Rng,
     input_size: usize,
-) -> impl FnMut() -> usize {
-    let input = data::Log {
-        entries: generate_vec(rng, input_size),
-    };
-
-    let mut bytes = Align16::frame(10_000_000);
-
-    move || {
-        black_box(populate_buffer(
-            black_box(&input),
-            black_box(bytes.slot().as_bytes()),
-        ))
+) -> Benchmarks<data::Log> {
+    Benchmarks {
+        input: data::Log {
+            entries: generate_vec(rng, input_size),
+        },
+        bytes: Align16::frame(1_000 * input_size),
+        benches: &[
+            Benchmark {
+                name: "populate_buffer_external",
+                bench: populate_buffer_external,
+            },
+            Benchmark {
+                name: "populate_buffer_prefix",
+                bench: populate_buffer_prefix,
+            },
+        ],
     }
 }

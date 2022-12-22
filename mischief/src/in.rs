@@ -8,11 +8,22 @@ use ::ptr_meta::Pointee;
 use crate::{Frame, Metadata, Pointer, Region, RegionalAllocator, Slot};
 
 /// A pointer which has its pointee in a specific memory region.
-#[derive(Clone, Copy)]
 pub struct In<P, R: Region> {
     ptr: P,
     region: PhantomData<R>,
 }
+
+impl<P: Clone, R: Region> Clone for In<P, R> {
+    #[inline]
+    fn clone(&self) -> Self {
+        Self {
+            ptr: self.ptr.clone(),
+            region: PhantomData,
+        }
+    }
+}
+
+impl<P: Copy, R: Region> Copy for In<P, R> {}
 
 impl<P: Pointer, R: Region> In<P, R>
 where

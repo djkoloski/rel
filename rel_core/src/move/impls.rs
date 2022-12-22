@@ -1,5 +1,5 @@
 use ::core::marker::PhantomData;
-use ::mischief::{In, Region, Slot};
+use ::mischief::{GhostRef, In, Region, Slot, Static, StaticRef};
 use ::situ::{ops::IndexMutRaw, Mut, Val};
 
 use crate::{Move, MoveExt};
@@ -110,6 +110,26 @@ where
 // SAFETY: `move_unsized_unchecked` does not have to initialize `out` because
 // `PhantomData` is zero-sized and so always initialized.
 unsafe impl<T: ?Sized, R: Region> Move<R> for PhantomData<T> {
+    unsafe fn move_unsized_unchecked(
+        _: In<Val<'_, Self>, R>,
+        _: In<Slot<'_, Self>, R>,
+    ) {
+    }
+}
+
+// SAFETY: `GhostRef`s are always properly-initialized because they are
+// zero-sized types.
+unsafe impl<T: ?Sized, R: Region> Move<R> for GhostRef<'_, T> {
+    unsafe fn move_unsized_unchecked(
+        _: In<Val<'_, Self>, R>,
+        _: In<Slot<'_, Self>, R>,
+    ) {
+    }
+}
+
+// SAFETY: `StaticRef`s are always properly-initialized because they are
+// zero-sized types.
+unsafe impl<S: Static, R: Region> Move<R> for StaticRef<'_, S> {
     unsafe fn move_unsized_unchecked(
         _: In<Val<'_, Self>, R>,
         _: In<Slot<'_, Self>, R>,

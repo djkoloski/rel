@@ -2,6 +2,7 @@ use ::core::{
     marker::{PhantomData, PhantomPinned},
     mem::MaybeUninit,
 };
+use ::mischief::{GhostRef, Static, StaticRef};
 
 use crate::{ops::IndexMutRaw, DropRaw, Mut};
 
@@ -56,6 +57,16 @@ impl<T: ?Sized> DropRaw for PhantomData<T> {
 }
 
 impl<T> DropRaw for MaybeUninit<T> {
+    #[inline]
+    unsafe fn drop_raw(_: Mut<'_, Self>) {}
+}
+
+impl<T: ?Sized> DropRaw for GhostRef<'_, T> {
+    #[inline]
+    unsafe fn drop_raw(_: Mut<'_, Self>) {}
+}
+
+impl<S: Static> DropRaw for StaticRef<'_, S> {
     #[inline]
     unsafe fn drop_raw(_: Mut<'_, Self>) {}
 }

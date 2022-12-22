@@ -1,8 +1,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use ::core::mem::MaybeUninit;
-use ::mischief::{GhostRef, Slot, StaticToken};
-use ::rel_allocators::*;
+use ::mischief::{GhostMut, Slot, StaticToken};
+use ::rel_allocators::legacy::{RelSlabAllocator, SlabAllocator};
 use ::rel_util::Align16;
 use ::situ::ops::DerefMutRaw;
 
@@ -15,7 +15,7 @@ fn rel_box() {
     let size = StaticToken::acquire(|mut token| {
         let bytes = Slot::new(&mut backing.0).unsize();
         let alloc =
-            SlabAllocator::<_>::try_new_in(bytes, GhostRef::leak(&mut token))
+            SlabAllocator::<_>::try_new_in(bytes, GhostMut::new(&mut token))
                 .unwrap();
 
         let int = 42.emplace_in::<I32>(alloc);

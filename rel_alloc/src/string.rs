@@ -1,7 +1,7 @@
 //! A UTF-8 encoded, growable string.
 
 use ::core::{fmt, ptr::copy_nonoverlapping};
-use ::mischief::{In, Slot};
+use ::mischief::{In, RegionalAllocator, Slot};
 use ::munge::munge;
 use ::ptr_meta::Pointee;
 use ::rel_core::{Basis, DefaultBasis, Emplace, EmplaceExt, Move, Portable};
@@ -111,24 +111,24 @@ impl<A: RawRegionalAllocator, B: Basis> DerefRaw for RelString<A, B> {
 }
 
 /// An emplacer for a `RelString` that copies its bytes from a `str`.
-pub struct Clone<'a, R>(pub R, pub &'a str);
+pub struct Clone<'a, A>(pub A, pub &'a str);
 
 // SAFETY:
 // - `RelString` is `Sized` and always has metadata `()`, so `emplaced_meta`
 //   always returns valid metadata for it.
 // - `emplace_unsized_unchecked` initializes its `out` parameter by emplacing to
 //   each field.
-unsafe impl<A, B, R> Emplace<RelString<A, B>, R::Region> for Clone<'_, R>
+unsafe impl<E, B, A> Emplace<RelString<E, B>, A::Region> for Clone<'_, A>
 where
-    A: DropRaw + RawRegionalAllocator<Region = R::Region>,
+    E: DropRaw + RawRegionalAllocator<Region = A::Region>,
     B: Basis,
-    R: RelAllocator<A>,
+    A: RegionalAllocator + RelAllocator<E, A::Region>,
 {
     fn emplaced_meta(&self) -> <RelString<A, B> as Pointee>::Metadata {}
 
     unsafe fn emplace_unsized_unchecked(
         self,
-        out: In<Slot<'_, RelString<A, B>>, A::Region>,
+        out: In<Slot<'_, RelString<E, B>>, A::Region>,
     ) {
         let len = self.1.len();
 

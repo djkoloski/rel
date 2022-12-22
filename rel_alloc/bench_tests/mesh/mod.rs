@@ -1,16 +1,29 @@
 mod data;
 
-use ::criterion::black_box;
-use ::mischief::{GhostRef, In, Region, Slot, StaticToken};
+use ::mischief::{
+    lease_static,
+    runtime_token,
+    In,
+    Region,
+    RegionalAllocator,
+    Slot,
+    StaticToken,
+    StaticVal,
+};
 use ::munge::munge;
 use ::rand::Rng;
 use ::rel_alloc::{alloc::RelAllocator, EmplaceIn, RelVec};
-use ::rel_allocators::{RelSlabAllocator, SlabAllocator};
+use ::rel_allocators::{
+    brand::Brand,
+    external::External,
+    prefix::{Prefix, RelPrefix},
+    slab::Slab,
+};
 use ::rel_core::{Emplace, EmplaceExt, Move, Portable, F32};
 use ::rel_util::Align16;
 use ::situ::{alloc::RawRegionalAllocator, DropRaw};
 
-use crate::{from_data::FromData, gen::generate_vec};
+use crate::{benchmarks::*, from_data::FromData, gen::generate_vec};
 
 #[derive(DropRaw, Move, Portable)]
 #[repr(C)]
@@ -82,7 +95,7 @@ pub struct RelMesh<A: RawRegionalAllocator> {
 unsafe impl<A, R> Emplace<RelMesh<A>, R::Region> for FromData<'_, R, data::Mesh>
 where
     A: DropRaw + RawRegionalAllocator<Region = R::Region>,
-    R: RelAllocator<A>,
+    R: RegionalAllocator + RelAllocator<A, R::Region>,
 {
     fn emplaced_meta(&self) -> <RelMesh<A> as ptr_meta::Pointee>::Metadata {}
 
@@ -102,33 +115,63 @@ where
     }
 }
 
-fn populate_buffer(data: &data::Mesh, buffer: Slot<'_, [u8]>) -> usize {
+fn populate_buffer_external<'a>(
+    data: &data::Mesh,
+    buffer: Slot<'a, [u8]>,
+) -> usize {
+    runtime_token!(AllocatorToken);
+    lease_static!(AllocatorToken => Allocator: External<'static, Slab>);
+
+    let mut allocator_token = AllocatorToken::acquire();
+    let buffer = unsafe { ::core::mem::transmute(buffer) };
+    let allocator = StaticVal::<Allocator>::new(
+        &mut allocator_token,
+        External::new(buffer).unwrap(),
+    );
+
     StaticToken::acquire(|mut token| {
-        let alloc =
-            SlabAllocator::<_>::try_new_in(buffer, GhostRef::leak(&mut token))
-                .unwrap();
+        let alloc = Brand::new_deref(allocator.as_ref(), &mut token);
 
-        let mesh = FromData { alloc, data }
-            .emplace_in::<RelMesh<RelSlabAllocator<_>>>(alloc);
+        ::core::mem::forget(
+            FromData { alloc, data }.emplace_in::<RelMesh<_>>(alloc),
+        );
 
-        alloc.deposit(mesh);
-        alloc.shrink_to_fit()
+        alloc.inner().control().len()
     })
 }
 
-pub fn make_bench(
+fn populate_buffer_prefix(data: &data::Mesh, buffer: Slot<'_, [u8]>) -> usize {
+    StaticToken::acquire(|mut token| {
+        let alloc =
+            Prefix::<Slab, _>::try_new_in_region(buffer, &mut token).unwrap();
+
+        ::core::mem::forget(
+            FromData { alloc, data }
+                .emplace_in::<RelMesh<RelPrefix<Slab, _>>>(alloc),
+        );
+
+        alloc.control().len()
+    })
+}
+
+pub fn make_benches(
     rng: &mut impl Rng,
     input_size: usize,
-) -> impl FnMut() -> usize {
-    let input = data::Mesh {
-        triangles: generate_vec(rng, input_size),
-    };
-
-    let mut bytes = Align16::frame(10_000_000);
-    move || {
-        black_box(populate_buffer(
-            black_box(&input),
-            black_box(bytes.slot().as_bytes()),
-        ))
+) -> Benchmarks<data::Mesh> {
+    Benchmarks {
+        input: data::Mesh {
+            triangles: generate_vec(rng, input_size),
+        },
+        bytes: Align16::frame(100 * input_size),
+        benches: &[
+            Benchmark {
+                name: "populate_buffer_external",
+                bench: populate_buffer_external,
+            },
+            Benchmark {
+                name: "populate_buffer_prefix",
+                bench: populate_buffer_prefix,
+            },
+        ],
     }
 }

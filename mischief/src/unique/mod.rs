@@ -1,12 +1,12 @@
-//! Unique and singleton types and tools for constructing them.
+//! Unique types and tools for constructing and using them.
 
-mod ghost_ref;
-mod static_ref;
+mod ghost;
+mod r#static;
 mod token;
 
-pub use ::mischief_derive::{Singleton, Unique};
+pub use ::mischief_derive::Unique;
 
-pub use self::{ghost_ref::*, static_ref::*, token::*};
+pub use self::{ghost::*, r#static::*, token::*};
 
 /// A type which guarantees that only one value can ever exist at a time.
 ///
@@ -18,24 +18,6 @@ pub unsafe trait Unique {}
 // SAFETY: Mutable references may not alias, so a mutable reference of a unique
 // type must also be unique.
 unsafe impl<T: Unique> Unique for &mut T {}
-
-/// A type which guarantees that all simultaneous values share the same state.
-///
-/// # Safety
-///
-/// Any two simultaneous instances of this type must be interchangeable and
-/// share the same state. A `Singleton` type might fulfill this obligation by
-/// referencing shared state, referencing a [`Unique`], or requiring the
-/// precondition to be checked manually.
-pub unsafe trait Singleton {}
-
-// SAFETY: All simultaneous shared references to a `Unique` type must be to the
-// same value.
-unsafe impl<T: Unique> Singleton for &T {}
-
-#[cfg(feature = "alloc")]
-// SAFETY: Every `Global` is guaranteed to share the same state.
-unsafe impl Singleton for ::heresy::alloc::Global {}
 
 /// Splits a unique value into several others.
 #[macro_export]

@@ -57,7 +57,7 @@ where
     B: Basis,
 {
     #[inline]
-    fn emplaced_meta(&self) -> <RelRef<'a, T, B> as Pointee>::Metadata {}
+    fn emplaced_meta(&self) -> <RelRef<'a, T, R, B> as Pointee>::Metadata {}
 
     unsafe fn emplace_unsized_unchecked(
         self,

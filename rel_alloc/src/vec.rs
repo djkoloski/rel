@@ -2,7 +2,7 @@
 //! `RelVec<T>`.
 
 use ::core::{alloc::Layout, fmt, ptr};
-use ::mischief::{In, Slot};
+use ::mischief::{In, RegionalAllocator, Slot};
 use ::munge::munge;
 use ::ptr_meta::Pointee;
 use ::rel_core::{
@@ -475,54 +475,54 @@ where
 }
 
 /// An emplacer for a new, empty `RelVec`.
-pub struct New<R>(pub R);
+pub struct New<A>(pub A);
 
 // SAFETY:
 // - `RelVec` is `Sized` and always has metadata `()`, so `emplaced_meta` always
 //   returns valid metadata for it.
 // - `emplace_unsized_unchecked` initializes its `out` parameter.
-unsafe impl<T, A, B, R> Emplace<RelVec<T, A, B>, R::Region> for New<R>
+unsafe impl<T, E, B, A> Emplace<RelVec<T, E, B>, A::Region> for New<A>
 where
     T: DropRaw,
-    A: DropRaw + RawRegionalAllocator<Region = R::Region>,
+    E: DropRaw + RawRegionalAllocator<Region = A::Region>,
     B: Basis,
     <B as Basis>::Usize: DropRaw,
-    R: RelAllocator<A>,
+    A: RegionalAllocator + RelAllocator<E, A::Region>,
 {
     fn emplaced_meta(&self) -> <RelVec<T, A, B> as Pointee>::Metadata {}
 
     unsafe fn emplace_unsized_unchecked(
         self,
-        out: In<Slot<'_, RelVec<T, A, B>>, R::Region>,
+        out: In<Slot<'_, RelVec<T, E, B>>, A::Region>,
     ) {
         WithCapacity(self.0, 0).emplace(out);
     }
 }
 
 /// An emplacer for a new `RelVec` with an initial capacity.
-pub struct WithCapacity<R>(pub R, pub usize);
+pub struct WithCapacity<A>(pub A, pub usize);
 
 // SAFETY:
 // - `RelVec` is `Sized` and always has metadata `()`, so `emplaced_meta` always
 //   returns valid metadata for it.
 // - `emplace_unsized_unchecked` initializes its `out` parameter by emplacing
 //   and writing to each field.
-unsafe impl<T, A, B, R> Emplace<RelVec<T, A, B>, R::Region> for WithCapacity<R>
+unsafe impl<T, E, B, A> Emplace<RelVec<T, E, B>, A::Region> for WithCapacity<A>
 where
     T: DropRaw,
-    A: DropRaw + RawRegionalAllocator<Region = R::Region>,
+    E: DropRaw + RawRegionalAllocator<Region = A::Region>,
     B: Basis,
     <B as Basis>::Usize: DropRaw,
-    R: RelAllocator<A>,
+    A: RegionalAllocator + RelAllocator<E, A::Region>,
 {
     fn emplaced_meta(
         &self,
-    ) -> <RelVec<T, A, B> as ptr_meta::Pointee>::Metadata {
+    ) -> <RelVec<T, E, B> as ptr_meta::Pointee>::Metadata {
     }
 
     unsafe fn emplace_unsized_unchecked(
         self,
-        out: In<Slot<'_, RelVec<T, A, B>>, R::Region>,
+        out: In<Slot<'_, RelVec<T, E, B>>, A::Region>,
     ) {
         let Self(alloc, cap) = self;
 

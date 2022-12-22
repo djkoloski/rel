@@ -1,3 +1,8 @@
+- [ ] Replace legacy slab allocator with new composable allocator and control
+- [ ] There's some notion of a "branded reference" that needs more exploration
+  - [ ] StaticMut is a branded reference with the additional property that it's zero-sized
+  - [ ] Some kind of "branding" of a reference to uniquely identify it? That would separate the notion of an allocator that always allocates in a single _unidentifiable_ memory segment. Then identifying that memory segment can be built back on top of these anonymous regional allocators.
+- [ ] Rewrite `split_token!` to drop the split input at the end of scope (so `runtime_token!`) works with it.
 - [ ] Extension methods for boxy types (e.g. `Box`, `OwnedVal`) that return an `In` (e.g. `deref_in`)
 - [ ] Should `In<P, Q>: DerefMut where P: DerefMut, P::Target: Unpin`?
 - [ ] Provide some allocators from a crate like `rel_allocator`

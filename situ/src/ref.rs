@@ -5,14 +5,7 @@ use ::core::{
     ops::Deref,
     ptr::NonNull,
 };
-use ::mischief::{
-    Pointer,
-    Region,
-    RestructurablePointer,
-    Singleton,
-    Unique,
-    Within,
-};
+use ::mischief::{Pointer, Region, RestructurablePointer, Within};
 use ::munge::{Destructure, Restructure};
 
 use crate::{
@@ -156,8 +149,3 @@ unsafe impl<'a, T, U: 'a> Restructure<U> for Ref<'a, T> {
         unsafe { Ref::new_unchecked(ptr) }
     }
 }
-
-// SAFETY: Because the borrowed `T` is unique and shared references borrow their
-// state from the underlying `T`, all `Ref<T>` to unique `T` must be sharing the
-// same value.
-unsafe impl<T: Unique + ?Sized> Singleton for Ref<'_, T> {}

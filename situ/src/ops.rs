@@ -1,5 +1,7 @@
 //! Variants of `ops` traits that work with raw references.
 
+use core::ops::{Deref, DerefMut};
+
 use ::ptr_meta::metadata;
 
 use crate::{Mut, Ref};
@@ -13,10 +15,29 @@ pub trait DerefRaw {
     fn deref_raw(this: Ref<'_, Self>) -> Ref<'_, Self::Target>;
 }
 
+impl<T: Deref> DerefRaw for T {
+    type Target = T::Target;
+
+    fn deref_raw(this: Ref<'_, Self>) -> Ref<'_, Self::Target> {
+        // SAFETY: `this.deref().deref()` is a reference to `Self` and so
+        // upholds the invariants required by `new_unchecked`.
+        unsafe { Ref::new_unchecked(this.deref().deref()) }
+    }
+}
+
 /// A variant of `DerefMut` that works with raw references.
 pub trait DerefMutRaw: DerefRaw {
     /// Mutably dereferences the value.
     fn deref_mut_raw(this: Mut<'_, Self>) -> Mut<'_, Self::Target>;
+}
+
+impl<T: DerefMut + Unpin> DerefMutRaw for T {
+    fn deref_mut_raw(mut this: Mut<'_, Self>) -> Mut<'_, Self::Target> {
+        // SAFETY: `this.deref_mut().deref_mut()` is a mutable reference to
+        // `Self`, which is `Unpin`, and so upholds the invariants required by
+        // `new_unchecked`.
+        unsafe { Mut::new_unchecked(this.deref_mut().deref_mut()) }
+    }
 }
 
 /// A variant of `Index` that works with raw references.

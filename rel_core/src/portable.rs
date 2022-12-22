@@ -3,7 +3,15 @@ use ::core::{
     marker::{PhantomData, PhantomPinned},
     mem::MaybeUninit,
 };
-use ::mischief::{GhostRef, StaticToken};
+use ::mischief::{
+    GhostMut,
+    GhostRef,
+    Static,
+    StaticMut,
+    StaticRef,
+    StaticToken,
+    StaticVal,
+};
 pub use ::rel_core_derive::Portable;
 
 /// A type that has the same representation on all targets.
@@ -61,9 +69,25 @@ unsafe impl<T: Portable> Portable for MaybeUninit<T> {}
 // `repr(transparent)`.
 unsafe impl<T: Portable + ?Sized> Portable for Cell<T> {}
 
+// SAFETY: `GhostMut` has a size of 0 and an alignment of 1. It has no bit
+// patterns.
+unsafe impl<T> Portable for GhostMut<'_, T> {}
+
 // SAFETY: `GhostRef` has a size of 0 and an alignment of 1. It has no bit
 // patterns.
-unsafe impl<T> Portable for GhostRef<T> {}
+unsafe impl<T> Portable for GhostRef<'_, T> {}
+
+// SAFETY: `StaticVal` has a size of 0 and an alignment of 1. It has no bit
+// patterns.
+unsafe impl<S: Static> Portable for StaticVal<'_, S> {}
+
+// SAFETY: `StaticMut` has a size of 0 and an alignment of 1. It has no bit
+// patterns.
+unsafe impl<S: Static> Portable for StaticMut<'_, S> {}
+
+// SAFETY: `StaticRef` has a size of 0 and an alignment of 1. It has no bit
+// patterns.
+unsafe impl<S: Static> Portable for StaticRef<'_, S> {}
 
 // SAFETY: `StaticToken` has a size of 0 and an alignment of 1. It has no bit
 // patterns.

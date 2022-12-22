@@ -1,7 +1,7 @@
 //! A pointer type for heap allocation.
 
 use ::core::{alloc::Layout, fmt, mem::MaybeUninit};
-use ::mischief::{In, Slot};
+use ::mischief::{In, RegionalAllocator, Slot};
 use ::munge::munge;
 use ::ptr_meta::Pointee;
 use ::rel_core::{
@@ -227,19 +227,19 @@ where
 // - `RelBox` is `Sized` and always has metadata `()`, so `emplaced_meta` always
 //   returns valid metadata for it.
 // - `emplace_unsized_unchecked` initializes its `out` parameter.
-unsafe impl<T, A, B, R> Emplace<RelBox<T, A, B>, R::Region> for OwnedVal<T, R>
+unsafe impl<T, E, B, A> Emplace<RelBox<T, E, B>, A::Region> for OwnedVal<T, A>
 where
     T: BasisPointee<B> + DropRaw + ?Sized,
-    A: DropRaw + RawRegionalAllocator<Region = R::Region>,
+    E: DropRaw + RawRegionalAllocator<Region = A::Region>,
     B: Basis,
-    R: RelAllocator<A>,
+    A: RegionalAllocator + RelAllocator<E, A::Region>,
 {
     #[inline]
     fn emplaced_meta(&self) -> <RelBox<T, A, B> as Pointee>::Metadata {}
 
     unsafe fn emplace_unsized_unchecked(
         self,
-        mut out: In<Slot<'_, RelBox<T, A, B>>, R::Region>,
+        mut out: In<Slot<'_, RelBox<T, E, B>>, A::Region>,
     ) {
         let this = In::new(self);
         let ptr = this.as_raw();

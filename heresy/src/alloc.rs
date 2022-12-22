@@ -1,4 +1,4 @@
-//! Memory alocation APIs.
+//! Memory allocation APIs.
 
 use ::core::{alloc::Layout, ptr::NonNull};
 
@@ -119,7 +119,8 @@ pub unsafe trait Allocator {
     ) -> Result<NonNull<[u8]>, AllocError> {
         debug_assert!(
             new_layout.size() >= old_layout.size(),
-            "`new_layout.size()` must be greater than or equal to `old_layout.size()`",
+            "`new_layout.size()` must be greater than or equal to \
+            `old_layout.size()`",
         );
 
         // SAFETY: `grow_in_place` has the same safety requirements as `grow`.
@@ -145,7 +146,7 @@ pub unsafe trait Allocator {
                     old_layout.size(),
                 );
             }
-            // SAFETY:The caller has guaranteed that `ptr` denotes a block
+            // SAFETY: The caller has guaranteed that `ptr` denotes a block
             // of memory currently allocated via this allocator, and that
             // `old_layout` fits that block of memory.
             unsafe {
@@ -204,7 +205,8 @@ pub unsafe trait Allocator {
     ) -> Result<NonNull<[u8]>, AllocError> {
         debug_assert!(
             new_layout.size() >= old_layout.size(),
-            "`new_layout.size()` must be greater than or equal to `old_layout.size()`",
+            "`new_layout.size()` must be greater than or equal to \
+            `old_layout.size()`",
         );
 
         let result =
@@ -243,7 +245,7 @@ pub unsafe trait Allocator {
                     new_layout.size() - old_layout.size(),
                 );
             }
-            // SAFETY:The caller has guaranteed that `ptr` denotes a block of
+            // SAFETY: The caller has guaranteed that `ptr` denotes a block of
             // memory currently allocated via this allocator, and that
             // `old_layout` fits that block of memory.
             unsafe {
@@ -393,7 +395,8 @@ pub unsafe trait Allocator {
     ) -> Result<NonNull<[u8]>, AllocError> {
         debug_assert!(
             new_layout.size() <= old_layout.size(),
-            "`new_layout.size()` must be less than or equal to `old_layout.size()`",
+            "`new_layout.size()` must be less than or equal to \
+            `old_layout.size()`",
         );
 
         let result =
@@ -527,7 +530,8 @@ impl Global {
 
         debug_assert!(
             new_layout.size() >= old_layout.size(),
-            "`new_layout.size()` must be greater than or equal to `old_layout.size()`"
+            "`new_layout.size()` must be greater than or equal to \
+            `old_layout.size()`"
         );
 
         let new_align = new_layout.align();
@@ -673,7 +677,8 @@ unsafe impl Allocator for Global {
 
         debug_assert!(
             new_layout.size() <= old_layout.size(),
-            "`new_layout.size()` must be smaller than or equal to `old_layout.size()`",
+            "`new_layout.size()` must be smaller than or equal to \
+            `old_layout.size()`",
         );
 
         match new_layout.size() {

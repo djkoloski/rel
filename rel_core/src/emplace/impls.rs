@@ -1,5 +1,5 @@
-use ::core::{mem::ManuallyDrop, ptr};
-use ::mischief::{In, Region, Slot};
+use ::core::{marker::PhantomData, mem::ManuallyDrop, ptr};
+use ::mischief::{GhostRef, In, Region, Slot, Static, StaticRef};
 use ::ptr_meta::Pointee;
 use ::situ::DropRaw;
 
@@ -31,6 +31,23 @@ impl_builtin!(i8, u8, bool, ());
 
 // SAFETY:
 // - `emplaced_meta` returns `()`, the only valid metadata for `Sized` types.
+// - `PhantomData<T>` is a zero-sized type and so is already initialized.
+unsafe impl<T, R> Emplace<PhantomData<T>, R> for PhantomData<T>
+where
+    T: ?Sized,
+    R: Region,
+{
+    fn emplaced_meta(&self) -> <PhantomData<T> as Pointee>::Metadata {}
+
+    unsafe fn emplace_unsized_unchecked(
+        self,
+        _: In<Slot<'_, PhantomData<T>>, R>,
+    ) {
+    }
+}
+
+// SAFETY:
+// - `emplaced_meta` returns `()`, the only valid metadata for `Sized` types.
 // - `emplace_unsized_unchecked` emplaces to every element of the `out` slot,
 //   which initializes it.
 unsafe impl<E, T, R: Region, const N: usize> Emplace<[T; N], R> for [E; N]
@@ -57,4 +74,24 @@ where
             emplacer_i.emplace(out_i);
         }
     }
+}
+
+// SAFETY:
+// - `emplaced_meta` returns `()`, the only valid metadata for `Sized` types.
+// - `GhostRef`s are always properly-initialized because they are zero-sized
+//   types.
+unsafe impl<T: ?Sized, R: Region> Emplace<Self, R> for GhostRef<'_, T> {
+    fn emplaced_meta(&self) -> <Self as Pointee>::Metadata {}
+
+    unsafe fn emplace_unsized_unchecked(self, _: In<Slot<'_, Self>, R>) {}
+}
+
+// SAFETY:
+// - `emplaced_meta` returns `()`, the only valid metadata for `Sized` types.
+// - `StaticRef`s are always properly-initialized because they are zero-sized
+//   types.
+unsafe impl<S: Static, R: Region> Emplace<Self, R> for StaticRef<'_, S> {
+    fn emplaced_meta(&self) -> <Self as Pointee>::Metadata {}
+
+    unsafe fn emplace_unsized_unchecked(self, _: In<Slot<'_, Self>, R>) {}
 }

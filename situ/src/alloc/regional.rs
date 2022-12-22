@@ -1,4 +1,4 @@
-use ::mischief::Region;
+use ::mischief::{Region, RegionalAllocator};
 
 use crate::alloc::RawAllocator;
 
@@ -11,4 +11,11 @@ use crate::alloc::RawAllocator;
 pub unsafe trait RawRegionalAllocator: RawAllocator {
     /// The region type for this allocator.
     type Region: Region;
+}
+
+// SAFETY: The `RawAllocator` impl for `T` proxies the `Allocator` impl for `T`
+// and the `Region` for `RegionalAllocator` is the same as the `Region` for
+// `RawRegionalAllocator`.
+unsafe impl<T: RegionalAllocator> RawRegionalAllocator for T {
+    type Region = T::Region;
 }

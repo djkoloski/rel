@@ -1,12 +1,25 @@
 mod data;
 
-use ::criterion::black_box;
-use ::mischief::{GhostRef, In, Region, Slot, StaticToken};
+use ::mischief::{
+    lease_static,
+    runtime_token,
+    In,
+    Region,
+    RegionalAllocator,
+    Slot,
+    StaticToken,
+    StaticVal,
+};
 use ::munge::munge;
 use ::ptr_meta::Pointee;
 use ::rand::Rng;
 use ::rel_alloc::{alloc::RelAllocator, EmplaceIn, RelString, RelVec};
-use ::rel_allocators::{RelSlabAllocator, SlabAllocator};
+use ::rel_allocators::{
+    brand::Brand,
+    external::External,
+    prefix::{Prefix, RelPrefix},
+    slab::Slab,
+};
 use ::rel_core::{
     option::RelOption,
     rel_tuple::{RelTuple2, RelTuple3},
@@ -24,7 +37,7 @@ use ::rel_core::{
 use ::rel_util::Align16;
 use ::situ::{alloc::RawRegionalAllocator, DropRaw};
 
-use crate::{from_data::FromData, gen::generate_vec};
+use crate::{benchmarks::*, from_data::FromData, gen::generate_vec};
 
 #[derive(DropRaw, Move, Portable)]
 #[repr(u8)]
@@ -63,7 +76,7 @@ pub struct RelItem<A: RawRegionalAllocator> {
 unsafe impl<A, R> Emplace<RelItem<A>, R::Region> for FromData<'_, R, data::Item>
 where
     A: DropRaw + Move<R::Region> + RawRegionalAllocator<Region = R::Region>,
-    R: Clone + RelAllocator<A>,
+    R: Clone + RegionalAllocator + RelAllocator<A, R::Region>,
 {
     fn emplaced_meta(&self) -> <RelItem<A> as Pointee>::Metadata {}
 
@@ -153,7 +166,7 @@ unsafe impl<A, R> Emplace<RelEntity<A>, R::Region>
     for FromData<'_, R, data::Entity>
 where
     A: DropRaw + Move<R::Region> + RawRegionalAllocator<Region = R::Region>,
-    R: Clone + RelAllocator<A>,
+    R: Clone + RegionalAllocator + RelAllocator<A, R::Region>,
 {
     fn emplaced_meta(&self) -> <RelEntity<A> as Pointee>::Metadata {}
 
@@ -226,7 +239,7 @@ unsafe impl<A, R> Emplace<RelRecipeBook<A>, R::Region>
     for FromData<'_, R, data::RecipeBook>
 where
     A: DropRaw + Move<R::Region> + RawRegionalAllocator<Region = R::Region>,
-    R: Clone + RelAllocator<A>,
+    R: Clone + RegionalAllocator + RelAllocator<A, R::Region>,
 {
     fn emplaced_meta(&self) -> <RelRecipeBook<A> as Pointee>::Metadata {}
 
@@ -333,7 +346,7 @@ unsafe impl<A, R> Emplace<RelPlayer<A>, R::Region>
     for FromData<'_, R, data::Player>
 where
     A: DropRaw + Move<R::Region> + RawRegionalAllocator<Region = R::Region>,
-    R: Clone + RelAllocator<A>,
+    R: Clone + RegionalAllocator + RelAllocator<A, R::Region>,
 {
     fn emplaced_meta(&self) -> <RelPlayer<A> as Pointee>::Metadata {}
 
@@ -483,7 +496,7 @@ unsafe impl<A, R> Emplace<RelSaveData<A>, R::Region>
     for FromData<'_, R, data::SaveData>
 where
     A: DropRaw + Move<R::Region> + RawRegionalAllocator<Region = R::Region>,
-    R: Clone + RelAllocator<A>,
+    R: Clone + RegionalAllocator + RelAllocator<A, R::Region>,
 {
     fn emplaced_meta(&self) -> <RelSaveData<A> as Pointee>::Metadata {}
 
@@ -508,33 +521,65 @@ where
     }
 }
 
-fn populate_buffer(data: &data::SaveData, buffer: Slot<'_, [u8]>) -> usize {
+fn populate_buffer_external(
+    data: &data::SaveData,
+    buffer: Slot<'_, [u8]>,
+) -> usize {
+    runtime_token!(AllocatorToken);
+    lease_static!(AllocatorToken => Allocator: External<'static, Slab>);
+
+    let mut allocator_token = AllocatorToken::acquire();
+    let buffer = unsafe { ::core::mem::transmute(buffer) };
+    let allocator = StaticVal::<Allocator>::new(
+        &mut allocator_token,
+        External::new(buffer).unwrap(),
+    );
     StaticToken::acquire(|mut token| {
-        let alloc =
-            SlabAllocator::<_>::try_new_in(buffer, GhostRef::leak(&mut token))
-                .unwrap();
+        let alloc = Brand::new_deref(allocator.as_ref(), &mut token);
 
-        let save_data = FromData { alloc, data }
-            .emplace_in::<RelSaveData<RelSlabAllocator<_>>>(alloc);
+        ::core::mem::forget(
+            FromData { alloc, data }.emplace_in::<RelSaveData<_>>(alloc),
+        );
 
-        alloc.deposit(save_data);
-        alloc.shrink_to_fit()
+        alloc.inner().control().len()
     })
 }
 
-pub fn make_bench(
+fn populate_buffer_prefix(
+    data: &data::SaveData,
+    buffer: Slot<'_, [u8]>,
+) -> usize {
+    StaticToken::acquire(|mut token| {
+        let alloc =
+            Prefix::<Slab, _>::try_new_in_region(buffer, &mut token).unwrap();
+
+        ::core::mem::forget(
+            FromData { alloc, data }
+                .emplace_in::<RelSaveData<RelPrefix<Slab, _>>>(alloc),
+        );
+
+        alloc.control().len()
+    })
+}
+
+pub fn make_benches(
     rng: &mut impl Rng,
     input_size: usize,
-) -> impl FnMut() -> usize {
-    let input = data::SaveData {
-        players: generate_vec(rng, input_size),
-    };
-
-    let mut bytes = Align16::frame(10_000_000);
-    move || {
-        black_box(populate_buffer(
-            black_box(&input),
-            black_box(bytes.slot().as_bytes()),
-        ))
+) -> Benchmarks<data::SaveData> {
+    Benchmarks {
+        input: data::SaveData {
+            players: generate_vec(rng, input_size),
+        },
+        bytes: Align16::frame(20_000 * input_size),
+        benches: &[
+            Benchmark {
+                name: "populate_buffer_external",
+                bench: populate_buffer_external,
+            },
+            Benchmark {
+                name: "populate_buffer_prefix",
+                bench: populate_buffer_prefix,
+            },
+        ],
     }
 }

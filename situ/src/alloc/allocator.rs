@@ -1,5 +1,5 @@
 use ::core::{alloc::Layout, ptr::NonNull};
-use ::heresy::alloc::AllocError;
+use ::heresy::alloc::{AllocError, Allocator};
 
 use crate::Ref;
 
@@ -137,7 +137,7 @@ pub unsafe trait RawAllocator {
                     old_layout.size(),
                 );
             }
-            // SAFETY:The caller has guaranteed that `ptr` denotes a block
+            // SAFETY: The caller has guaranteed that `ptr` denotes a block
             // of memory currently allocated via this allocator, and that
             // `old_layout` fits that block of memory.
             unsafe {
@@ -229,7 +229,7 @@ pub unsafe trait RawAllocator {
                     new_layout.size() - old_layout.size(),
                 );
             }
-            // SAFETY:The caller has guaranteed that `ptr` denotes a block of
+            // SAFETY: The caller has guaranteed that `ptr` denotes a block of
             // memory currently allocated via this allocator, and that
             // `old_layout` fits that block of memory.
             unsafe {
@@ -262,12 +262,12 @@ pub unsafe trait RawAllocator {
     /// (Specifically: it is _legal_ to implement this trait atop an underlying
     /// native allocation library that aborts on memory exhaustion).
     unsafe fn raw_grow_in_place(
-        _: Ref<'_, Self>,
+        this: Ref<'_, Self>,
         ptr: NonNull<u8>,
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<[u8]>, AllocError> {
-        let _ = (ptr, old_layout, new_layout);
+        let _ = (this, ptr, old_layout, new_layout);
 
         Err(AllocError)
     }
@@ -422,13 +422,113 @@ pub unsafe trait RawAllocator {
     /// (Specifically: it is _legal_ to implement this trait atop an underlying
     /// native allocation library that aborts on memory exhaustion).
     unsafe fn raw_shrink_in_place(
-        _: Ref<'_, Self>,
+        this: Ref<'_, Self>,
         ptr: NonNull<u8>,
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<[u8]>, AllocError> {
-        let _ = (ptr, old_layout, new_layout);
+        let _ = (this, ptr, old_layout, new_layout);
 
         Err(AllocError)
+    }
+}
+
+// SAFETY: This `RawAllocator` impl proxies the `Allocator` impl for `T`, which
+// has the same safety requirements as `RawAllocator`.
+unsafe impl<T: Allocator + ?Sized> RawAllocator for T {
+    fn raw_allocate(
+        this: Ref<'_, Self>,
+        layout: Layout,
+    ) -> Result<NonNull<[u8]>, AllocError> {
+        T::allocate(&*this, layout)
+    }
+
+    unsafe fn raw_deallocate(
+        this: Ref<'_, Self>,
+        ptr: NonNull<u8>,
+        layout: Layout,
+    ) {
+        // SAFETY: The caller has guaranteed the safety requirements for
+        // `raw_deallocate`, which are the same as the safety conditions for
+        // `deallocate`.
+        unsafe { T::deallocate(&*this, ptr, layout) }
+    }
+
+    fn raw_allocate_zeroed(
+        this: Ref<'_, Self>,
+        layout: Layout,
+    ) -> Result<NonNull<[u8]>, AllocError> {
+        T::allocate_zeroed(&*this, layout)
+    }
+
+    unsafe fn raw_grow(
+        this: Ref<'_, Self>,
+        ptr: NonNull<u8>,
+        old_layout: Layout,
+        new_layout: Layout,
+    ) -> Result<NonNull<[u8]>, AllocError> {
+        // SAFETY: The caller has guaranteed the safety requirements for
+        // `raw_grow`, which are the same as the safety conditions for `grow`.
+        unsafe { T::grow(&*this, ptr, old_layout, new_layout) }
+    }
+
+    unsafe fn raw_grow_zeroed(
+        this: Ref<'_, Self>,
+        ptr: NonNull<u8>,
+        old_layout: Layout,
+        new_layout: Layout,
+    ) -> Result<NonNull<[u8]>, AllocError> {
+        // SAFETY: The caller has guaranteed the safety requirements for
+        // `raw_grow_zeroed`, which are the same as the safety conditions for
+        // `grow_zeroed`.
+        unsafe { T::grow_zeroed(&*this, ptr, old_layout, new_layout) }
+    }
+
+    unsafe fn raw_grow_in_place(
+        this: Ref<'_, Self>,
+        ptr: NonNull<u8>,
+        old_layout: Layout,
+        new_layout: Layout,
+    ) -> Result<NonNull<[u8]>, AllocError> {
+        // SAFETY: The caller has guaranteed the safety requirements for
+        // `raw_grow_in_place`, which are the same as the safety conditions for
+        // `grow_in_place`.
+        unsafe { T::grow_in_place(&*this, ptr, old_layout, new_layout) }
+    }
+
+    unsafe fn raw_grow_zeroed_in_place(
+        this: Ref<'_, Self>,
+        ptr: NonNull<u8>,
+        old_layout: Layout,
+        new_layout: Layout,
+    ) -> Result<NonNull<[u8]>, AllocError> {
+        // SAFETY: The caller has guaranteed the safety requirements for
+        // `raw_grow_zeroed_in_place`, which are the same as the safety
+        // conditions for `grow_zeroed_in_place`.
+        unsafe { T::grow_zeroed_in_place(&*this, ptr, old_layout, new_layout) }
+    }
+
+    unsafe fn raw_shrink(
+        this: Ref<'_, Self>,
+        ptr: NonNull<u8>,
+        old_layout: Layout,
+        new_layout: Layout,
+    ) -> Result<NonNull<[u8]>, AllocError> {
+        // SAFETY: The caller has guaranteed the safety requirements for
+        // `raw_shrink`, which are the same as the safety conditions for
+        // `shrink`.
+        unsafe { T::shrink(&*this, ptr, old_layout, new_layout) }
+    }
+
+    unsafe fn raw_shrink_in_place(
+        this: Ref<'_, Self>,
+        ptr: NonNull<u8>,
+        old_layout: Layout,
+        new_layout: Layout,
+    ) -> Result<NonNull<[u8]>, AllocError> {
+        // SAFETY: The caller has guaranteed the safety requirements for
+        // `raw_shrink_in_place`, which are the same as the safety conditions
+        // for `shrink_in_place`.
+        unsafe { T::shrink_in_place(&*this, ptr, old_layout, new_layout) }
     }
 }

@@ -27,6 +27,10 @@ path = "../rel_alloc"
 version = "0.1"
 path = "../rel_core"
 
+[dependencies.rel_util]
+version = "0.1"
+path = "../rel_util"
+
 [dependencies.situ]
 version = "0.1"
 path = "../situ"
